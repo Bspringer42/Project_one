@@ -1,0 +1,134 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+library(twitteR)
+library(httr)
+library(tm)
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(wordcloud)
+library(tidytext)
+library(scales)
+library(stringr)
+
+
+tweet.df<-read.csv("SOTU.csv")
+
+
+tot.tweet <-paste(tweet.df$text, collapse = " ")#make into a string
+
+tweet.df$text <- sapply(tweet.df$text,function(row) iconv(row, "latin1", "ASCII", sub=""))#removes emojis/problem Characters
+
+
+corp.tweet<-Corpus(VectorSource(tweet.df$text))#to Corpus
+
+clean.corp<-tm_map(corp.tweet, content_transformer(tolower))
+removeURL<- function(x) gsub("http[^[ : space: ]]*", " ", x)
+clean.corp<-tm_map(clean.corp, content_transformer(removeURL))
+clean.corp<-tm_map(clean.corp, removeNumbers)
+clean.corp<-tm_map(clean.corp, removePunctuation)
+clean.corp<-tm_map(clean.corp, removeWords, stopwords('english'))
+clean.corp<-tm_map(clean.corp, removeWords, c("realdonaldtrump","realdonaldtrumps"))#had to remove, dominated the word frequency charts
+clean.corp<-tm_map(clean.corp, stripWhitespace)
+
+#cleaning process
+
+
+
+trump.dtm<-DocumentTermMatrix(clean.corp)#corp to documenttermmatrix
+
+tidy.trump<-tidy(trump.dtm)#coercing into a tiddle
+
+
+tidy.trump%>%
+  count(term, sort = TRUE)%>%
+  filter(n > 50) %>%
+  mutate(term = reorder(term, n)) %>%
+  ggplot(aes(term, n, fill = n)) + 
+  geom_col()+
+  coord_flip()#freq count and visulization
+
+cloud.tweet<-tidy.trump%>%
+  count(term, sort = TRUE)#word clouds are fun
+
+wordcloud(cloud.tweet$term, cloud.tweet$n, min.freq = 75)# the Donald is too big for this. 
+
+
+tidy.trump1<-tweet.df%>%
+  unnest_tokens(word, text)%>%
+  count(word, sort = TRUE) %>%
+  ungroup()
+
+total.count<-tidy.trump1 %>%
+  mutate(total = sum(n))#adding a total column
+
+Trump_tf<-total.count %>%
+  mutate(rank = row_number(), 'tf' = n/total)#rank and term frequency column
+
+Trump_tf %>%
+  ggplot(aes(rank, tf)) +
+  geom_line() +
+  scale_x_log10() +
+  scale_y_log10()
+#zipf
+
+tidy.trump<-filter(tidy.trump, !grepl('http', term)) #removing excess html adresses 
+
+Trump_tfidf<-tidy.trump %>%
+  bind_tf_idf(term, document, count)#tf-idf
+
+Trump_tfidf<-Trump_tfidf %>%
+  arrange(desc(tf_idf))
+
+
+Trump_tfidf%>%
+  arrange(desc(tf_idf))%>%
+  head(20)%>%
+  ggplot(aes(term, tf_idf)) +
+  geom_col()+
+  coord_flip()
+  #visualize tf-idf
+
+trump.sentiment<-tidy.trump %>%
+  inner_join(get_sentiments("bing"), by = c(term = "word"))
+#added bing sentiment to tweets
+
+trump.sentiment %>%
+  count(sentiment, term, wt = count) %>%
+  ungroup() %>%
+  filter(n >= 10) %>% #low frequency required to pick out more terms
+  mutate(n = ifelse(sentiment == "negative", -n, n)) %>%
+  mutate(term = reorder(term, n)) %>%
+  ggplot(aes(term, n , fill = sentiment)) +
+  ylab("Sentiment") +
+  geom_bar(stat = "identity") +
+  coord_flip()
+#visulizations of scores
+
+trump.trigram<-tweet.df %>%
+  unnest_tokens(trigrams, text, token = "ngrams" , n=3) %>%
+  count(trigrams, sort = TRUE) #creating trigrams
+
+trump.trigram<-trump.trigram %>%
+  filter(str_detect(trigrams, "damaging"))#will add highest and lowest sentiments to contextualize 
+
+trump.trigram %>%
+  top_n(10) %>%
+  ggplot(aes(trigrams, n, fill = n)) +
+  geom_col() +
+  coord_flip()
+#visulizations of trigrams
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
