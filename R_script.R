@@ -1,3 +1,9 @@
+title: "R Notebook"
+output: html_notebook
+---
+  
+  
+  ```{r}
 library(twitteR)
 library(httr)
 
@@ -6,15 +12,15 @@ api.secret<-"#secret#"
 api.key<-"#key#"
 token.secret<-"#secret#"
 
+```
 
-
-
+```{r}
 setup_twitter_oauth(api.key,api.secret,access.token,token.secret)
 
 trump.tweet24<-searchTwitter("@realDonaldTrump", n = 500, since = '2018-1-24', until = '2018-1-25')#state of the union Jan 30th, 9pm E/T
+```
 
-
-
+```{r}
 
 
 library(tm)
@@ -100,20 +106,3 @@ trump.sentiment %>%
   geom_bar(stat = "identity") +
   coord_flip()
 #visulizations of scores
-
-trump.trigram<-tweet.df %>%
-  unnest_tokens(trigrams, text, token = "ngrams" , n=3) %>%
-  count(trigrams, sort = TRUE) #creating trigrams
-
-trump.trigram<-trump.trigram %>%
-  filter(str_detect(trigrams, "damaging"))#will add highest and lowest sentiments to contextualize 
-
-trump.trigram %>%
-  top_n(10) %>%
-  ggplot(aes(trigrams, n, fill = n)) +
-  geom_col() +
-  coord_flip()
-#visulizations of trigrams
-
-
-
