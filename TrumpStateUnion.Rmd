@@ -14,7 +14,7 @@ library(tm)
 library(tidyverse)
 library(dplyr)
 library(ggplot2)
-library(wordcloud)
+library(wordcloud2)
 library(tidytext)
 library(scales)
 library(stringr)
@@ -50,7 +50,7 @@ tidy.trump<-tidy(trump.dtm)#coercing into a tiddle
 
 tidy.trump%>%
   count(term, sort = TRUE)%>%
-  filter(n > 50) %>%
+  filter(n > 75) %>%
   mutate(term = reorder(term, n)) %>%
   ggplot(aes(term, n, fill = n)) + 
   geom_col()+
@@ -59,7 +59,7 @@ tidy.trump%>%
 cloud.tweet<-tidy.trump%>%
   count(term, sort = TRUE)#word clouds are fun
 
-wordcloud(cloud.tweet$term, cloud.tweet$n, min.freq = 75)# the Donald is too big for this. 
+wordcloud2(cloud.tweet, backgroundColor = "black")# the Donald is too big for this. 
 
 
 tidy.trump1<-tweet.df%>%
@@ -114,15 +114,50 @@ trump.sentiment %>%
 #visulizations of scores
 
 trump.trigram<-tweet.df %>%
-  unnest_tokens(trigrams, text, token = "ngrams" , n=3) %>%
+  unnest_tokens(trigrams, text, token = "ngrams" , n=3)%>%
   count(trigrams, sort = TRUE) #creating trigrams
 
-trump.trigram<-trump.trigram %>%
-  filter(str_detect(trigrams, "damaging"))#will add highest and lowest sentiments to contextualize 
+trump.trigram<- trump.trigram%>%
+  separate(trigrams, c("word1", "word2", "word3"), sep = " ")%>%
+  filter(!word1 %in% stop_words$word, !word2 %in% stop_words$word, !word3 %in% stop_words$word)%>%
+  filter(!word1 == "https", !word2 == "https", !word3 == "https")%>%
+  filter(!word1 < 1000000, !word2 < 1000000, !word3 < 1000000)#the only way I figured out how to remove numbers
 
-trump.trigram %>%
+
+  
+
+
+
+library(igraph)
+library(ggraph)
+
+set.seed(1234)
+
+a<-grid::arrow(type = "closed", length = unit (.10, "inches"))#arrow creation
+
+trump.trigram %>% #trigram mapping
+  filter(n>15)%>%
+  graph_from_data_frame() %>%
+  ggraph(layout = 'fr')+
+  geom_edge_link(aes(edge_alpha = n), arrow = a) +
+  geom_node_point(color = "red") +
+  geom_node_text(aes(label = name))+
+  theme_void()
+
+
+trump.unite<-trump.trigram%>%
+  unite(trigram, word1, word2, word3, sep = " ")
+
+
+trump.unite1<-trump.unite %>%
+  filter(str_detect(trigram, "#sentiment#"))#will add highest and lowest sentiments to contextualize 
+
+
+
+trump.unite1 %>%
+  arrange(desc(n))%>%
   top_n(10) %>%
-  ggplot(aes(trigrams, n, fill = n)) +
+  ggplot(aes(trigram, n, fill = n)) +
   geom_col() +
   coord_flip()
 #visulizations of trigrams
